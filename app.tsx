@@ -25,6 +25,15 @@ const Layout = (props: { children: any }) => (
     </head>
     <body>
       <h1>Simple Counter</h1>
+      {
+        [1, 2, 3].map(
+          x => (
+            <div>
+              {x}
+            </div>
+          )
+        )
+      }
       {props.children}
     </body>
   </html>
