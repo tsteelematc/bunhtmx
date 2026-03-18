@@ -2,18 +2,32 @@
 import { Hono } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { randomUUID } from "crypto";
+import { Database } from "bun:sqlite";
+
+const db = new Database("sessions.db");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 0
+  )
+`);
 
 const app = new Hono();
-const sessions = new Map<string, number>();
 
 function getSessionCount(c: any): [string, number] {
   let id = getCookie(c, "sid");
-  if (!id || !sessions.has(id)) {
+  if (!id) {
     id = randomUUID();
-    sessions.set(id, 0);
-    setCookie(c, "sid", id);
+    setCookie(c, "sid", id, { path: "/" });
   }
-  return [id, sessions.get(id)!];
+
+  db.prepare("INSERT OR IGNORE INTO sessions (id, count) VALUES (?, 0)").run(id);
+
+  const row = db
+    .prepare('SELECT "count" AS cnt FROM sessions WHERE id = ?')
+    .get(id) as { cnt: number };
+
+  return [id, row.cnt];
 }
 
 const Layout = (props: { children: any }) => (
@@ -60,13 +74,13 @@ app.get("/", (c) => {
 
 app.post("/inc", (c) => {
   const [id, count] = getSessionCount(c);
-  sessions.set(id, count + 1);
+  db.prepare("UPDATE sessions SET count = ? WHERE id = ?").run(count + 1, id);
   return c.html(<Counter count={count + 1} />);
 });
 
 app.post("/dec", (c) => {
   const [id, count] = getSessionCount(c);
-  sessions.set(id, count - 1);
+  db.prepare("UPDATE sessions SET count = ? WHERE id = ?").run(count - 1, id);
   return c.html(<Counter count={count - 1} />);
 });
 
